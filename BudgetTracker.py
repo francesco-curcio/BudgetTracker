@@ -121,6 +121,13 @@ class BudgetTracker:
         self.conn.commit()
         print(f"Transaction with ID {transaction_id} updated successfully.")
     
+    def get_categories(self):
+        """Retrieve a list of unique categories from the database."""
+        categories_query = "SELECT DISTINCT category FROM transactions;"
+        self.cursor.execute(categories_query)
+        categories = [row[0] for row in self.cursor.fetchall()]
+        return categories
+    
     def __del__(self):
         """Close the database connection when the object is deleted."""
         self.conn.close()

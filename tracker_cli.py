@@ -27,7 +27,16 @@ if __name__ == "__main__":
                     date = (datetime.today() - timedelta(days=1)).strftime('%Y-%m-%d')
                 else:
                     date = date_input
-                category = input("Enter the category (e.g., Food, Rent, etc.): ")
+                # read categories from db
+                categories = tracker.get_categories()
+                print("Select a category from the list or enter a new one:")
+                for i, cat in enumerate(categories):
+                    print(f"{i}. {cat}")
+                category_input = input("Enter the category number or a new category: ")
+                if category_input.isdigit() and int(category_input) < len(categories):
+                    category = categories[int(category_input)]
+                else:
+                    category = category_input
                 description = input("Enter a description: ")
                 amount = float(input("Enter the amount (use negative for expenses): "))
                 tracker.add_transaction(date, category, description, amount)
