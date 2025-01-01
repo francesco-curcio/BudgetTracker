@@ -128,6 +128,48 @@ class BudgetTracker:
         categories = [row[0] for row in self.cursor.fetchall()]
         return categories
     
+    def filter_transactions(self, category=None, start_date=None, end_date=None):
+        """Filter transactions by category and/or date range."""
+        query = "SELECT * FROM transactions WHERE 1=1"
+        params = []
+
+        if category:
+            query += " AND category = ?"
+            params.append(category)
+        if start_date:
+            query += " AND date >= ?"
+            params.append(start_date)
+        if end_date:
+            query += " AND date <= ?"
+            params.append(end_date)
+
+        df = pd.read_sql_query(query, self.conn, params=params)
+        print("\nFiltered Transactions:")
+        print(df)
+    
+    def get_all_transactions(self):
+        """Retrieve all transactions from the database."""
+        df = pd.read_sql_query("SELECT * FROM transactions", self.conn)
+        return df.values.tolist()  # Restituisce una lista di transazioni
+
+    def get_filtered_transactions(self, category=None, date=None):
+        """Retrieve transactions filtered by category and/or date."""
+        query = "SELECT * FROM transactions WHERE 1=1"
+        params = []
+
+        if category:
+            query += " AND category = ?"
+            params.append(category)
+        if date:
+            query += " AND date = ?"
+            params.append(date)
+
+        self.cursor.execute(query, params)
+        transactions = self.cursor.fetchall()
+        return transactions
+
+
+    
     def __del__(self):
         """Close the database connection when the object is deleted."""
         self.conn.close()
