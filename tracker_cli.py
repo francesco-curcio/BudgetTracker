@@ -103,7 +103,22 @@ def main():
                     print("Transaction added successfully!")
 
                 elif choice == "1":
-                    tracker.view_summary()
+                    start_date_input = input("Enter start date (YYYY-MM-DD, 'today', 'yesterday', leave blank for no start date): ") or None
+                    if start_date_input and start_date_input.lower() == "today":
+                        start_date = datetime.today().strftime('%Y-%m-%d')
+                    elif start_date_input and start_date_input.lower() == "yesterday":
+                        start_date = (datetime.today() - timedelta(days=1)).strftime('%Y-%m-%d')
+                    else:
+                        start_date = start_date_input
+
+                    end_date_input = input("Enter end date (YYYY-MM-DD, 'today', 'yesterday', leave blank for no end date): ") or None
+                    if end_date_input and end_date_input.lower() == "today":
+                        end_date = datetime.today().strftime('%Y-%m-%d')
+                    elif end_date_input and end_date_input.lower() == "yesterday":
+                        end_date = (datetime.today() - timedelta(days=1)).strftime('%Y-%m-%d')
+                    else:
+                        end_date = end_date_input
+                    tracker.view_summary(start_date, end_date)
 
                 elif choice == "2":
                     tracker.calculate_balance()
@@ -136,7 +151,7 @@ def main():
 
                 else:
                     print("Invalid choice. Please try again.")
-            except KeyboardInterrupt:
+            except (KeyboardInterrupt, EOFError):
                 print("\nExiting Budget Tracker. Goodbye!")
                 break
 

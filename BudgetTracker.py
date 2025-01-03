@@ -48,33 +48,81 @@ class BudgetTracker:
                 VALUES (?, ?, ?, ?)
             """, new_transaction)
 
-    def view_summary(self):
-        """Visualize a summary of expenses by category."""
+    def view_summary(self, start_date=None, end_date=None):
+        """Visualize a summary of expenses by category with optional filters."""
         summary_query = """
             SELECT category, SUM(amount) as total
             FROM transactions
-            WHERE category != 'Initial'
-            GROUP BY category;
+            WHERE 1=1
         """
-        self.cursor.execute(summary_query)
-        summary = self.cursor.fetchall()
+        params = []
 
-        categories = [row[0] for row in summary]
-        totals = [abs(row[1]) for row in summary]  # Use absolute value to account for negative expenses
+        if start_date:
+            summary_query += " AND date >= ?"
+            params.append(start_date)
+        if end_date:
+            summary_query += " AND date <= ?"
+            params.append(end_date)
+
+        summary_query += " GROUP BY category;"
+        df_summary = pd.read_sql_query(summary_query, self.conn, params=params)
 
         print("\nExpense Summary by Category:")
-        for category, total in zip(categories, totals):
-            print(f"{category}: {total:.2f}")
+        for _, row in df_summary.iterrows():
+            print(f"{row['category']}: {row['total']:.2f}")
 
         # Visualization
-        plt.figure(figsize=(8, 6))
-        plt.bar(categories, totals, color="skyblue")
-        plt.xlabel("Category")
-        plt.ylabel("Total Amount")
-        plt.title("Expenses by Category")
-        plt.xticks(rotation=45)
+        fig, axs = plt.subplots(2, 2, figsize=(18, 10))
+
+        # Bar plot
+        colors = ['green' if total >= 0 else 'red' for total in df_summary['total']]
+        axs[0, 0].bar(df_summary['category'], df_summary['total'], color=colors)
+        axs[0, 0].set_xlabel("Category")
+        axs[0, 0].set_ylabel("Total Amount")
+        axs[0, 0].set_title("Expenses by Category")
+
+        # Pie chart
+        expenses = df_summary[df_summary['total'] < 0]
+        axs[0, 1].pie(abs(expenses['total']), labels=expenses['category'], autopct='%1.1f%%', startangle=140, wedgeprops=dict(width=0.3))
+        axs[0, 1].axis('equal')
+        axs[0, 1].set_title("Expense Distribution by Category")
+
+        # Time graph of account balance
+        balance_query = """
+            SELECT date, SUM(amount) OVER (ORDER BY date) as balance
+            FROM transactions
+            WHERE 1=1
+        """
+        if start_date:
+            balance_query += " AND date >= ?"
+        if end_date:
+            balance_query += " AND date <= ?"
+
+        df_balance = pd.read_sql_query(balance_query, self.conn, params=params)
+        df_balance['date'] = pd.to_datetime(df_balance['date'])
+
+        axs[1, 0].plot(df_balance['date'], df_balance['balance'], marker='o')
+        axs[1, 0].xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%d-%m-%Y'))
+        if len(df_balance['date'].dt.date.unique()) < 10:
+            axs[1, 0].xaxis.set_major_locator(plt.matplotlib.dates.DayLocator(interval=1))
+        axs[1, 0].set_xlabel("Date")
+        axs[1, 0].set_ylabel("Balance")
+        axs[1, 0].set_title("Account Balance Over Time")
+        axs[1, 0].tick_params(axis='x', rotation=45)
+
+        # as last plot show the a bar plot with a red bar that sums all the negative values and a green bar that sums all the positive values
+        total_income = df_summary[df_summary['total'] > 0]['total'].sum()
+        total_expenses = abs(df_summary[df_summary['total'] < 0]['total'].sum())
+        total_values = [total_income, total_expenses]
+        colors = ['green', 'red']
+        axs[1, 1].bar(['Income', 'Expenses'], total_values, color=colors, width=1.)
+        axs[1, 1].set_xlabel("Category")
+        axs[1, 1].set_ylabel("Total Amount")
+        axs[1, 1].set_title("Total Income vs Total Expenses")
+
         plt.tight_layout()
         plt.show()
+        
 
     def calculate_balance(self):
         """Calculate the current balance (total income - total expenses)."""
