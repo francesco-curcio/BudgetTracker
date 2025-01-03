@@ -1,15 +1,16 @@
 import sqlite3
 import pandas as pd
 import matplotlib.pyplot as plt
+from typing import List, Optional, Tuple
 
 class BudgetTracker:
-    def __init__(self, db_file="budget_data.db"):
+    def __init__(self, db_file: str = "budget_data.db"):
         self.db_file = db_file
         self.conn = sqlite3.connect(self.db_file)
         self.create_table()
         self.initialize_data_file()
 
-    def create_table(self):
+    def create_table(self) -> None:
         """Create the transactions table if it doesn't exist."""
         with self.conn:
             self.conn.execute("""
@@ -22,24 +23,25 @@ class BudgetTracker:
             )
             """)
 
-    def initialize_data_file(self):
+    def initialize_data_file(self, initial_amount: Optional[float] = None) -> None:
         """Initialize the database with the initial amount if the table is empty."""
-        self.cursor = self.conn.cursor()
-        self.cursor.execute("SELECT COUNT(*) FROM transactions")
-        count = self.cursor.fetchone()[0]
-        if count == 0:
-            initial_amount = float(input("Enter the initial amount of money in the account: "))
-            if initial_amount < 0:
-                raise ValueError("Initial amount must be a positive number.")
-            today = pd.Timestamp("today").strftime('%Y-%m-%d')
-            initial_transaction = (today, "Initial", "Initial Amount", initial_amount)
-            with self.conn:
-                self.conn.execute("""
+        with self.conn:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM transactions")
+            count = cursor.fetchone()[0]
+            if count == 0:
+                if initial_amount is None:
+                    initial_amount = float(input("Enter the initial amount of money in the account: "))
+                if initial_amount < 0:
+                    raise ValueError("Initial amount must be a positive number.")
+                today = pd.Timestamp("today").strftime('%Y-%m-%d')
+                initial_transaction = (today, "Initial", "Initial Amount", initial_amount)
+                cursor.execute("""
                     INSERT INTO transactions (date, category, description, amount)
                     VALUES (?, ?, ?, ?)
                 """, initial_transaction)
 
-    def add_transaction(self, date, category, description, amount):
+    def add_transaction(self, date: str, category: str, description: str, amount: float) -> None:
         """Add a new transaction to the database."""
         new_transaction = (date, category, description, amount)
         with self.conn:
@@ -48,7 +50,7 @@ class BudgetTracker:
                 VALUES (?, ?, ?, ?)
             """, new_transaction)
 
-    def view_summary(self, start_date=None, end_date=None):
+    def view_summary(self, start_date: Optional[str] = None, end_date: Optional[str] = None) -> None:
         """Visualize a summary of expenses by category with optional filters."""
         summary_query = """
             SELECT category, SUM(amount) as total
@@ -80,6 +82,7 @@ class BudgetTracker:
         axs[0, 0].set_xlabel("Category")
         axs[0, 0].set_ylabel("Total Amount")
         axs[0, 0].set_title("Expenses by Category")
+        axs[0, 0].xaxis.set_tick_params(rotation=45)
 
         # Pie chart
         expenses = df_summary[df_summary['total'] < 0]
@@ -110,40 +113,38 @@ class BudgetTracker:
         axs[1, 0].set_title("Account Balance Over Time")
         axs[1, 0].tick_params(axis='x', rotation=45)
 
-        # as last plot show the a bar plot with a red bar that sums all the negative values and a green bar that sums all the positive values
+        # Total Income vs Total Expenses
         total_income = df_summary[df_summary['total'] > 0]['total'].sum()
         total_expenses = abs(df_summary[df_summary['total'] < 0]['total'].sum())
         total_values = [total_income, total_expenses]
         colors = ['green', 'red']
-        axs[1, 1].bar(['Income', 'Expenses'], total_values, color=colors, width=1.)
+        axs[1, 1].bar(['Income', 'Expenses'], total_values, color=colors, width=1.0)
         axs[1, 1].set_xlabel("Category")
         axs[1, 1].set_ylabel("Total Amount")
         axs[1, 1].set_title("Total Income vs Total Expenses")
 
         plt.tight_layout()
         plt.show()
-        
 
-    def calculate_balance(self):
+    def calculate_balance(self) -> None:
         """Calculate the current balance (total income - total expenses)."""
         df = pd.read_sql_query("SELECT SUM(amount) as balance FROM transactions", self.conn)
         balance = df['balance'].iloc[0]
         print(f"\nCurrent Balance: {balance:.2f}")
-    
-    def print_transactions(self):
+
+    def print_transactions(self) -> None:
         """Print all transactions in the database."""
         df = pd.read_sql_query("SELECT * FROM transactions", self.conn, index_col='id')
         print("\nAll Transactions:")
         print(df)
-    
-    def delete_transaction(self, transaction_id):
+
+    def delete_transaction(self, transaction_id: int) -> None:
         """Delete a transaction by its ID."""
-        delete_query = "DELETE FROM transactions WHERE id = ?;"
-        self.cursor.execute(delete_query, (transaction_id,))
-        self.conn.commit()
+        with self.conn:
+            self.conn.execute("DELETE FROM transactions WHERE id = ?", (transaction_id,))
         print(f"Transaction with ID {transaction_id} deleted successfully.")
-    
-    def modify_transaction(self, transaction_id, date=None, category=None, description=None, amount=None):
+
+    def modify_transaction(self, transaction_id: int, date: Optional[str] = None, category: Optional[str] = None, description: Optional[str] = None, amount: Optional[float] = None) -> None:
         """Modify an existing transaction."""
         update_query = "UPDATE transactions SET "
         updates = []
@@ -165,18 +166,19 @@ class BudgetTracker:
         update_query += ", ".join(updates) + " WHERE id = ?;"
         params.append(transaction_id)
 
-        self.cursor.execute(update_query, params)
-        self.conn.commit()
+        with self.conn:
+            self.conn.execute(update_query, params)
         print(f"Transaction with ID {transaction_id} updated successfully.")
-    
-    def get_categories(self):
+
+    def get_categories(self) -> List[str]:
         """Retrieve a list of unique categories from the database."""
-        categories_query = "SELECT DISTINCT category FROM transactions;"
-        self.cursor.execute(categories_query)
-        categories = [row[0] for row in self.cursor.fetchall()]
+        with self.conn:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT DISTINCT category FROM transactions;")
+            categories = [row[0] for row in cursor.fetchall()]
         return categories
-    
-    def filter_transactions(self, category=None, start_date=None, end_date=None):
+
+    def filter_transactions(self, category: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None) -> None:
         """Filter transactions by category and/or date range."""
         query = "SELECT * FROM transactions WHERE 1=1"
         params = []
@@ -194,13 +196,13 @@ class BudgetTracker:
         df = pd.read_sql_query(query, self.conn, params=params)
         print("\nFiltered Transactions:")
         print(df)
-    
-    def get_all_transactions(self):
+
+    def get_all_transactions(self) -> List[Tuple]:
         """Retrieve all transactions from the database."""
         df = pd.read_sql_query("SELECT * FROM transactions", self.conn)
-        return df.values.tolist()  # Restituisce una lista di transazioni
+        return df.values.tolist()
 
-    def get_filtered_transactions(self, category=None, date=None):
+    def get_filtered_transactions(self, category: Optional[str] = None, date: Optional[str] = None) -> List[Tuple]:
         """Retrieve transactions filtered by category and/or date."""
         query = "SELECT * FROM transactions WHERE 1=1"
         params = []
@@ -212,12 +214,12 @@ class BudgetTracker:
             query += " AND date = ?"
             params.append(date)
 
-        self.cursor.execute(query, params)
-        transactions = self.cursor.fetchall()
+        with self.conn:
+            cursor = self.conn.cursor()
+            cursor.execute(query, params)
+            transactions = cursor.fetchall()
         return transactions
 
-
-    
     def __del__(self):
         """Close the database connection when the object is deleted."""
         self.conn.close()
