@@ -8,6 +8,14 @@ import atexit
 
 HIST_FILE = ".tracker_history"
 
+def formatted_input(prompt: str, example: str = "", separator: str = "-") -> str:
+    print(separator * 50)
+    print(f"{prompt}")
+    if example:
+        print(f"Example: {example}")
+    print(separator * 50)
+    return input("> ")
+
 def setup_readline():
     try:
         readline.read_history_file(HIST_FILE)
@@ -55,20 +63,32 @@ def handle_filter(tracker, args):
     end_date = None if end_date == "None" else end_date
     tracker.filter_transactions(category, start_date, end_date)
 
-def interactive_mode(tracker):
+def interactive_mode(tracker, first_time):
     while True:
         try:
-            print("\nBudget Tracker Options:")
-            print("0. Add Transaction")
-            print("1. View Summary")
-            print("2. Calculate Balance")
-            print("3. Print Transactions")
-            print("4. Delete Transaction")
-            print("5. Modify Transaction")
-            print("6. Filter Transactions")
-            print("7. Exit")
+            print("=" * 50)
+            if first_time:
+                print(" " * 15 + "WELCOME TO BUDGET TRACKER")
+                print("=" * 50)
+                first_time = False
+            else:
+                print(" " * 15 + "MAIN MENU")
+                print("=" * 50)
+            print("Your personal tool to track and manage finances efficiently.\n")
+            print("Here are your options:\n")
+            print("  [0] Add Transaction     - Record an income or expense")
+            print("  [1] View Summary        - See an overview of expenses by category")
+            print("  [2] Calculate Balance   - Check your current account balance")
+            print("  [3] Print Transactions  - List all recorded transactions")
+            print("  [4] Delete Transaction  - Remove a transaction by its ID")
+            print("  [5] Modify Transaction  - Update details of an existing transaction")
+            print("  [6] Filter Transactions - View specific transactions by category/date")
+            print("  [7] Exit                - Close the application")
+            print("\n" + "=" * 50)
+            print("Use the numbers above to choose an action and press Enter.")
+            print("Type 'Ctrl+C'/'Ctrl+D' at any time to exit.\n")
 
-            choice = input("Enter your choice: ")
+            choice = formatted_input("Enter your choice: ")
 
             if choice == "0":
                 handle_interactive_add(tracker)
@@ -95,16 +115,22 @@ def interactive_mode(tracker):
             break
 
 def handle_interactive_add(tracker):
-    date_input = input("Enter the date (YYYY-MM-DD) or 'today'/'yesterday': ")
+    date_input = formatted_input(
+        "Enter the date (YYYY-MM-DD) or 'today'/'yesterday': ",
+        example="2025-01-01")
     date = resolve_date(date_input)
     categories = tracker.get_categories()
     print("Select a category from the list or enter a new one:")
     for i, cat in enumerate(categories):
         print(f"{i}. {cat}")
-    category_input = input("Enter the category number or a new category: ")
+    category_input = formatted_input("Enter the category number or a new category: ")
     category = categories[int(category_input)] if category_input.isdigit() and int(category_input) < len(categories) else category_input
-    description = input("Enter a description: ")
-    amount = float(input("Enter the amount (use negative for expenses): "))
+    description = formatted_input(
+        "Enter a short description of the transaction: ",
+        example="Lunch with friends")
+    amount = float(formatted_input(
+        "Enter the amount (use negative for expenses, postive for income): ",
+        example="-25.50"))
     tracker.add_transaction(date, category, description, amount)
     print("Transaction added successfully!")
 
@@ -114,28 +140,30 @@ def handle_interactive_view(tracker):
     tracker.view_summary(start_date, end_date)
 
 def resolve_date_input(prompt):
-    date_input = input(prompt) or None
+    date_input = formatted_input(prompt) or None
     return resolve_date(date_input) if date_input else None
 
 def handle_interactive_modify(tracker):
-    transaction_id = int(input("Enter the transaction ID to modify: "))
-    date = input("Enter the new date (leave blank to keep unchanged): ") or None
-    category = input("Enter the new category (leave blank to keep unchanged): ") or None
-    description = input("Enter the new description (leave blank to keep unchanged): ") or None
-    amount = input("Enter the new amount (leave blank to keep unchanged): ")
+    transaction_id = int(formatted_input("Enter the transaction ID to modify: "))
+    date_input = formatted_input("Enter the new date (leave blank to keep unchanged, 'today', 'yesterday'): ") or None
+    date = resolve_date(date_input) if date_input else None
+    category = formatted_input("Enter the new category (leave blank to keep unchanged): ") or None
+    description = formatted_input("Enter the new description (leave blank to keep unchanged): ") or None
+    amount = formatted_input("Enter the new amount (leave blank to keep unchanged): ")
     amount = float(amount) if amount else None
     tracker.modify_transaction(transaction_id, date, category, description, amount)
 
 def handle_interactive_filter(tracker):
-    category = input("Enter category to filter (leave blank for all): ") or None
-    start_date = input("Enter start date (YYYY-MM-DD, leave blank for no start date): ") or None
-    end_date = input("Enter end date (YYYY-MM-DD, leave blank for no end date): ") or None
+    category = formatted_input("Enter category to filter (leave blank for all): ") or None
+    start_date = formatted_input("Enter start date (YYYY-MM-DD, leave blank for no start date): ") or None
+    end_date = formatted_input("Enter end date (YYYY-MM-DD, leave blank for no end date): ") or None
     tracker.filter_transactions(category, start_date, end_date)
 
 def main():
     setup_readline()
     args = parse_arguments()
     tracker = BudgetTracker()
+    first_time = True
 
     if args.add:
         handle_add(tracker, args)
@@ -152,7 +180,7 @@ def main():
     elif args.filter:
         handle_filter(tracker, args)
     else:
-        interactive_mode(tracker)
+        interactive_mode(tracker, first_time)
 
 if __name__ == "__main__":
     main()
