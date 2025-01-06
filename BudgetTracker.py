@@ -50,7 +50,10 @@ class BudgetTracker:
                 VALUES (?, ?, ?, ?)
             """, new_transaction)
 
-    def view_summary(self, start_date: Optional[str] = None, end_date: Optional[str] = None) -> None:
+    def view_summary(self, 
+                     start_date: Optional[str] = None, 
+                     end_date: Optional[str] = None, 
+                     future_days: Optional[int] = None) -> None:
         """Visualize a summary of expenses by category with optional filters."""
         summary_query = """
             SELECT category, SUM(amount) as total
@@ -104,14 +107,51 @@ class BudgetTracker:
         df_balance = pd.read_sql_query(balance_query, self.conn, params=params)
         df_balance['date'] = pd.to_datetime(df_balance['date'])
 
+        # Remove duplicate dates
+        df_balance = df_balance.drop_duplicates(subset='date')
+
+        # Ensure dates are spaced by 1 day
+        all_dates = pd.date_range(start=df_balance['date'].min(), end=df_balance['date'].max())
+        df_balance = df_balance.set_index('date').reindex(all_dates, method='ffill').reset_index()
+        df_balance.columns = ['date', 'balance']
+
         axs[1, 0].plot(df_balance['date'], df_balance['balance'], marker='o')
-        axs[1, 0].xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%d-%m-%Y'))
-        if len(df_balance['date'].dt.date.unique()) < 10:
-            axs[1, 0].xaxis.set_major_locator(plt.matplotlib.dates.DayLocator(interval=1))
         axs[1, 0].set_xlabel("Date")
         axs[1, 0].set_ylabel("Balance")
         axs[1, 0].set_title("Account Balance Over Time")
         axs[1, 0].tick_params(axis='x', rotation=45)
+
+        # Naive prediction of future balance
+        if not df_balance.empty and future_days is not None:
+            last_balance = df_balance['balance'].iloc[-1]
+            daily_max_change = df_balance['balance'].diff().max()
+            # daily_min_change = df_balance['balance'].diff().min()
+            daily_mean_change = df_balance['balance'].diff().mean()
+            future_dates = pd.date_range(df_balance['date'].iloc[-1] + pd.Timedelta(days=1), periods=future_days)
+            future_max_balances = [last_balance + daily_max_change * i for i in range(1, future_days + 1)]
+            # future_min_balances = [last_balance + daily_min_change * i for i in range(1, future_days + 1)]
+            future_mean_balances = [last_balance + daily_mean_change * i for i in range(1, future_days + 1)]
+
+            # Connect the last point with the future lines
+            future_dates = pd.to_datetime([df_balance['date'].iloc[-1]] + list(future_dates))
+            future_max_balances = [last_balance] + future_max_balances
+            # future_min_balances = [last_balance] + future_min_balances
+            future_mean_balances = [last_balance] + future_mean_balances
+
+            axs[1, 0].plot(future_dates, future_max_balances, linestyle='--', color='orange', label='Max Predicted Balance')
+            # axs[1, 0].plot(future_dates, future_min_balances, linestyle='--', color='blue', label='Min Predicted Balance')
+            axs[1, 0].plot(future_dates, future_mean_balances, linestyle='--', color='green', label='Mean Predicted Balance')
+            axs[1, 0].legend()
+
+        # line at 0
+        axs[1, 0].axhline(y=0, color='black', linestyle='--')
+
+        axs[1, 0].xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%d-%m-%Y'))
+        n_days = len(df_balance['date'].dt.date.unique()) + future_days if future_days is not None else len(df_balance['date'].dt.date.unique())
+        if n_days < 10:
+            axs[1, 0].xaxis.set_major_locator(plt.matplotlib.dates.DayLocator(interval=1))
+        else:
+            axs[1, 0].xaxis.set_major_locator(plt.matplotlib.dates.DayLocator(interval=5))
 
         # Total Income vs Total Expenses
         total_income = df_summary[df_summary['total'] > 0]['total'].sum()

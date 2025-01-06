@@ -137,7 +137,9 @@ def handle_interactive_add(tracker):
 def handle_interactive_view(tracker):
     start_date = resolve_date_input("Enter start date (YYYY-MM-DD, 'today', 'yesterday', leave blank for no start date): ")
     end_date = resolve_date_input("Enter end date (YYYY-MM-DD, 'today', 'yesterday', leave blank for no end date): ")
-    tracker.view_summary(start_date, end_date)
+    future_days_input = formatted_input("Enter the number of days to predict (0 for no prediction, leave blank for no prediction): ")
+    future_days = int(future_days_input) if future_days_input else None
+    tracker.view_summary(start_date, end_date, future_days)
 
 def resolve_date_input(prompt):
     date_input = formatted_input(prompt) or None
